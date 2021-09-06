@@ -33,4 +33,83 @@ async function calculateSupplyApy(cToken) {
     //compound by days per year -1 because a year period of the period in the year is one less than a number of days
     //- 1 to keep the decimal part * 100 to get a percentage
     return 100 * (Math.pow((supplyRatePerBlock / ethMantissa * blocksPerDay) + 1, daysPerYear - 1) - 1);
-} 
+}
+
+async function calculateCompApy(cToken, ticker, underlyingDecimals){
+    //amount of Comp tokens given to lenders or the borrowers of the market FOR THE CURRENT BLOCK
+    //as part of the liquidity mining programm
+    let compSpeed = await Compound.eth.read(
+        comptroller,
+        'function compSpeeds(address cToken) public view return(uint)'
+        [cToken],
+        { provider }
+    );
+
+    let comPrice = await Compound.eth.read(
+        //pass the addrss of the oracle
+        opf,
+        'function price(string memory symbol) external view returns(uint)',
+        //ticker for the comp token
+        [ Compound.COMP],
+        { provider }
+    );
+    //if the cToken is cDai, the underlying is DAI
+    let underlyingPrice = await Compound.eth.read(
+        opf,
+        'function price(string memory symbol) external view returns(uint)',
+        [ ticker ], 
+        { provider }
+    );
+    //total supply of the cToken we have emmitted
+    //the more lenders we have, the higher total supply
+    let totalSupply = await Compound.eth.read(
+        cToken,
+        'function totalSupply() public view returns(uint)',
+        //no argument
+        [],
+        { provider }
+    );
+    // if the cToken is cDai and the exchange rate is 10, it's means for 1 cDai we need 10 DAI
+    let exchangeRate = await Compound.eth.read(
+        cToken,
+        'function exchangeRateCurrent() public return(uint)',
+        [],
+        { provider }
+    );
+
+    compSpeed = compSpeed / 1e18;
+    //handle decimals
+    compPrice = compPrice / 1e6;
+    underlyingPrice = underlyingPrice / 1e6;
+    //+ before to transform in to a number
+    //ethMantissa : the value of the contract is scale by 10 * 18
+    exchangeRate = exchangeRate.toString() / ethMantissa;
+    //need to adjust the total supply
+    //convert this total supply in terms of dollar
+    //we nned first to convert this from the amount of cToken to an amount of underlying token and the usd value
+    //the number of decimals of undelying tokens to convert to a full token, we need to divide by math.pow
+    //10 * number of decimals of underlying tokens
+    totalSupply = totalSupply().toString() * exchangeRate * underlyingPrice / Math.pow(10, underlying);
+    //calculate the number of comp tokens the borrower receive in one day
+    const compPerDay = compSpeed * blocksPerDay;
+    //comp tokens the lenders receive in one day
+    //no compounding effect, the number of comp tokens receive is not depend on the comp token
+    //that you receive in the previous block
+    return 100 * (compPrice * compPerDay / totalSupply) & 365;
+}
+
+//combine a comp APY and supply APY to calculate the total APY
+
+async function calculateApy(cTokenTicker, underlyingTicker){
+    const underlyingDecimals = Compound.decimals[cTokenTicker];
+    //get address of the cToken
+    const cTokenAddress = Compound.util.getAddress(cTokenTicker);
+    //execute supply APY  + comp APY
+    const [supplyApy, compApy] = await Promise.all([
+        calculateSupplyApy(cTokenAddress),
+        calculateCompApy(cTokenAddress, underlyingTicker, underlyingDecimals)
+    ]);
+    return {ticker: underlyingTicker, supplyApy, compApy};
+}
+
+export default calculateApy
