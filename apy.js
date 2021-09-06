@@ -40,23 +40,23 @@ async function calculateCompApy(cToken, ticker, underlyingDecimals){
     //as part of the liquidity mining programm
     let compSpeed = await Compound.eth.read(
         comptroller,
-        'function compSpeeds(address cToken) public view return(uint)'
-        [cToken],
+        'function compSpeeds(address cToken) public view returns (uint)',
+        [ cToken ],
         { provider }
     );
 
-    let comPrice = await Compound.eth.read(
+    let compPrice = await Compound.eth.read(
         //pass the addrss of the oracle
         opf,
-        'function price(string memory symbol) external view returns(uint)',
+        'function price(string memory symbol) external view returns (uint)',
         //ticker for the comp token
-        [ Compound.COMP],
+        [ Compound.COMP ],
         { provider }
     );
     //if the cToken is cDai, the underlying is DAI
     let underlyingPrice = await Compound.eth.read(
         opf,
-        'function price(string memory symbol) external view returns(uint)',
+        'function price(string memory symbol) external view returns (uint)',
         [ ticker ], 
         { provider }
     );
@@ -64,7 +64,7 @@ async function calculateCompApy(cToken, ticker, underlyingDecimals){
     //the more lenders we have, the higher total supply
     let totalSupply = await Compound.eth.read(
         cToken,
-        'function totalSupply() public view returns(uint)',
+        'function totalSupply() returns (uint)',
         //no argument
         [],
         { provider }
@@ -72,7 +72,7 @@ async function calculateCompApy(cToken, ticker, underlyingDecimals){
     // if the cToken is cDai and the exchange rate is 10, it's means for 1 cDai we need 10 DAI
     let exchangeRate = await Compound.eth.read(
         cToken,
-        'function exchangeRateCurrent() public return(uint)',
+        'function exchangeRateCurrent() returns (uint)',
         [],
         { provider }
     );
@@ -83,13 +83,13 @@ async function calculateCompApy(cToken, ticker, underlyingDecimals){
     underlyingPrice = underlyingPrice / 1e6;
     //+ before to transform in to a number
     //ethMantissa : the value of the contract is scale by 10 * 18
-    exchangeRate = exchangeRate.toString() / ethMantissa;
+    exchangeRate = +exchangeRate.toString() / ethMantissa;
     //need to adjust the total supply
     //convert this total supply in terms of dollar
     //we nned first to convert this from the amount of cToken to an amount of underlying token and the usd value
     //the number of decimals of undelying tokens to convert to a full token, we need to divide by math.pow
     //10 * number of decimals of underlying tokens
-    totalSupply = totalSupply().toString() * exchangeRate * underlyingPrice / Math.pow(10, underlying);
+    totalSupply = (+totalSupply.toString() * exchangeRate * underlyingPrice / Math.pow(10, underlying));
     //calculate the number of comp tokens the borrower receive in one day
     const compPerDay = compSpeed * blocksPerDay;
     //comp tokens the lenders receive in one day
